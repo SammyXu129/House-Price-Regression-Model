@@ -1,0 +1,223 @@
+---
+title: What properties of a house can predict its price?
+# Use letters for affiliations
+author:
+  - name: A Multiple linear Regression Model
+  
+#  - affiliations: DATA2002 Project Group, Faculty of Science, School of Mathematics and Statistics, University of Sydney, Sydney, Australia
+
+    
+# Optional: line of arbitrary text with additional information.
+# Could be used, for example, to mention the bibliographic info in a post-print.
+# If not specified, defaults to "This version was compiled on \today"
+#date_subtitle: Published in *Journal of Statistical Software*, 2018
+
+# For footer text  TODO(fold into template, allow free form two-authors)
+
+
+
+# Abstract                           --------------CHANGE THE ABSTRACT
+abstract: Pre-assigned a dataset detailing US prices of 1734 New York (NY) households and their respective architectural amenities, this report aims to examine and identify the leading determinants driving NY household prices using a Multiple Linear Regression model whilst simultaneously evaluating the model’s appropriateness and performance for this dataset. Leading determinants were selected from amongst the amenities/columns using a backwards-variable selection approach coupled with the Akaike Information Criterion. The resultant regression model found waterfronts, household status’ of being newly-constructed, and bathroom counts to be large determinants behind household prices. However, the regressions model itself was found to be questionably-compatible with the data, and thus such observations are likely to be inconclusive.
+
+
+
+
+
+# Paper size for the document, values of letter and a4
+papersize: a4
+
+# Font size of the document, values of 9pt (default), 10pt, 11pt and 12pt
+fontsize: 9pt
+
+# Optional: Force one-column layout, default is two-column
+#one_column: true
+
+# Optional: Enables lineno mode, but only if one_column mode is also true
+lineno: true
+
+# Optional: Enable one-sided layout, default is two-sided
+#one_sided: true
+
+# Optional: Enable section numbering, default is unnumbered
+numbersections: true
+
+# Optional: Specify the depth of section number, default is 5
+secnumdepth: 5
+
+# Optional: Skip inserting final break between acknowledgements, default is false
+skip_final_break: true
+
+# Optional: Bibliography 
+bibliography: pinp
+
+# Optional: Enable a 'Draft' watermark on the document
+#watermark: true
+
+
+# Produce a pinp document
+output: pinp::pinp
+
+
+
+
+
+---
+
+```{r include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(broom)
+library(caret)
+library(kableExtra)
+```
+
+```{r include=FALSE}
+rawdata = read_tsv("housing-prices-ge19.txt")
+```
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,include=FALSE}
+data = janitor::clean_names(rawdata)
+data1 = data %>% select(-c("test"))
+data2 = data1 %>% select("price", "lot_size", "waterfront", "age", "land_value", "new_construct", "central_air", "heat_type", "living_area", 
+                         "bedrooms", "bathrooms", "rooms")
+data2 = data2 %>% mutate(
+  heat_type_hotwater = if_else(heat_type=="Hot Water", 1, 0),
+  heat_type_hotair = if_else(heat_type=="Hot Air", 1, 0),
+  heat_type_none = if_else(heat_type=="None", 1, 0)
+) %>% select(-c("heat_type"))
+fullmodel2 = lm(price ~ ., data = data2)
+step.back.aic2 = step(fullmodel2, direction="backward", trace=FALSE)
+```
+
+```{r include=FALSE}
+leading_determinants = data2 %>% select(-c("heat_type_hotwater", "heat_type_none"))
+leading_determinants = leading_determinants %>% mutate(residuals = step.back.aic2$residuals, fitted = step.back.aic2$fitted.values)
+```
+
+
+
+
+
+
+
+# Introduction 
+The priority aim of this report is to identify the leading household amenity factors provided in the dataset that contribute the greatest to fluctuations in NY household prices, as well as their specific degrees of per-unit influence over property pricing. As a result, the prominent combinations of variables of interest should ideally arise, allowing for generally-optimised decisions of household price budgets contingent on preferred household amenities. This will be achieved via application of a multiple regression model whilst assessing the validity of resultant analyses through model evaluation with respect to the underlying data.
+
+
+# Dataset
+The dataset text file was imported into a dataframe, specifying its tab-delimited nature. An examination of the dataframe reveals rows of household property prices with column details describing standard household and geographical amenities such as land value and ages of the properties. Further investigation into the source data directed attention towards a dataset named Houses in Saratoga County (2006) with identical column variables along metadata on variable definitions and units of measurements. However, no information could be found regarding data collection methodology. Many of the variables were measured in American units such as price in USD, and lot_size in acres. 
+
+```{r check_assumptions_weight,fig.width=4,fig.height= 3,fig.cap="Residuals Plot and QQ Plot", echo=FALSE,message=FALSE,warning=FALSE}
+# check assumption
+library(ggfortify)
+lm=lm(price~ lot_size+ waterfront+age+land_value+ new_construct+central_air+living_area+bedrooms+bathrooms+rooms+heat_type_hotair, leading_determinants)
+autoplot(lm, which=1:4,ncol = 2, label.size = 3, colour="steelblue") + theme_bw()
+```
+
+# Analysis
+
+***Data Manipulation: ***
+Before regressions analysis, it was necessary to explore the data for sufficiently significant variables, noting the immediate removal of the “test” column due to its lack of meaningful purpose. Then visualize all numeric data to check whether there are some unusual observations(***Appendix:Fig.4***), noting that there are some extreme outliers if we remove them, we could get a better model(see the further explanation in assumption part ), but at this stage, as we can not determine to what extent of removing the outliers. This was initiated with a manual backwards-searching approach to successively remove insignificant amenity/column regressor variables at the 95% significance level. This process was repeated until no variables could be removed of which subsequently, the resultant model was implemented into the Akaike Information Criterion (AIC) function. It was notable that this AIC summary suggested inter-heat_type insignificance; the initial model was thus reevaluated, keeping only the significant variables from the manual back-search approach whilst transforming the heat_type variable into multiple dummy variables with Electric as the base-reference. The aforementioned backwards-search method was repeated on this new model dataset, removing the Hot Water and None heat_type variables to confirm the aforementioned AIC summary. Feeding this new full model back into the AIC function, there existed no more variables with p-values exceeding 0.05, verifying this model as the draft regression model of which model evaluation should follow. 
+
+***Assumptions: ***
+To examine the Linearity assumption of the data set, it is essential to check the distribution of residuals against the regression model’s fitted values(***Fig.1***). The blue line, shown in the graph, is not a perfect horizontal line, but no distinct pattern, which could satisfy the linearity assumption. For the homoskedasticity, according to the first graph, the distribution of residuals are reasonably constant, around the zero mean when looking at the entire range of prices. Then check it by examining scale-log plot(the third graph). By looking at the blue line, It is clear that the variances of residuals increase with fitted value, suggesting the non-constant variances or heteroscedasticity. Then we try the log transformation, although the homoscedasticity improves a bit, the linearity is impacted a lot. The second normal QQ plot enables us to estimate the Normality. It is clear that there are many outliers that depart from the diagonal line particularly at ends of the line. However, as the sample is quite large here, based on Central Limited Theorem, we could approximately conclude that the data is normally distributed and we could have a valid inference. Eventually, when coming to the assumption of Independence, according to the original website, it writes “the dataset is a random sample of 1734 houses taken from full Saratoga Housing Data”. And then check the correlations between each two variables(***Appendix:Fig.5***), we could see there is no super correlative paris. Thus we could know that each observation is independently distributed. However, when restricting attention to the middle 90% of prices using the “quantile” function from 0.05 to 0.95, the residual’s distribution around zero mean appears to be equally-spread around 0(***Appendix:Fig.6***). Thus it can be suggested that this regression model is only valid for estimating non-extreme household prices; this also further suggests that the linearity assumption is only met for this range of non-extreme prices. In addition, the independence of observations is indiscernible due to a lack of information regarding exactly how distinct variables were measured, potentially obscuring correlative or dependent relationships between residuals.
+
+# Results  
+
+$\text{Price} = 7629.14 + 7328.53(\operatorname{lot\_size}) + 120646.11(\operatorname{waterfront}) - 157.3(\operatorname{age}) + 0.92(\operatorname{land\_value}) - 44924.44(\operatorname{new\_construct})+9568.78(\operatorname{central\_air})+70.29(\operatorname{living\_area})-7672.3(\operatorname{bedrooms}$ $\times\operatorname{rooms}_{\operatorname{bed}}) + 22687.1(\operatorname{bathrooms} \times \operatorname{rooms}_{\operatorname{bath}}) + 3076.43(\operatorname{rooms}) + 10476.35(\operatorname{heat\_type\_hotair}) + \epsilon$
+
+<center>
+
+***Coefficients: ***
+Interpreting the regression model coefficients, the price intercept estimate of 7629.14 is uninterpretable as a household possessing zero values for rooms, bathrooms, and lot_size (for example) are illogical. With regards to the leading determinants driving NY household USD prices, the variables with the largest coefficients and their dollar interpretations are as follows: the existence of a waterfront predicts an average price increase of $120646.11; a household being a new_construct predicts an average price decrease of $44924.44; a one count increase in bathrooms predicts a price increase of $22687.11. However, there appears to be some concerning figures such as the status of being newly constructed, which seemingly decreases average household price against the logical conclusion of newer infrastructure being superior and more costly. A similar case arises in bedrooms with its predicted average price decrease per bedroom count increase. These are likely to be flaws sourced from the poor applicability of the crafted regression model, however, could also potentially be attributed to factors specific to the real estate industry - expertise that data science students generally won’t possess. 
+
+***Performance: ***
+Testing in-sample performance, the r-squared of the model was 0.654, meaning that around 65% of the observed variation in household prices was explained by the model’s regressors. The RMSE of approximately $57900 is quite large, almost a third of the median house price of $189700. Further observing the mean absolute error of approximately $41100 which is more resilient to outliers, this is slightly more acceptable, representing the average amount mis-predicted by the model. Testing out-of-sample performance measures via 10-fold cross validation yield similar results.
+
+
+# Limitations
+The most major limitation of this analysis is the inability for the multiple regressions model to account for extreme values of price. This explains several incompatibility issues with individual regressor variables and regression assumptions of linearity and heteroscedasticity; these can be considerably improved by limiting the price range to non-extreme values, however as a consequence, misappropriate the model. Perhaps a different model independent of linearity may be more effective in characterising determinants driving household prices. The lack of knowledge regarding how the data was obtained and collected may also pose issues to the assumption of independent observations as this obscures possible sources of inter-variable relationships and bias. There’s also the assumption that the dataset, sourcing households from Saratoga County only, reflects all household price behaviours throughout NY which is questionable.
+
+# Discussion and Conclusion
+From the analysis, we find that there are 11 aspects that impact on the NY housing price. the leading factors, larger size of lot, if property includes the waterfront, the higher value of land, if the house has central air, bigger  living area, more rooms and bathrooms and if the heat is powered by hotair, increase the house pricing while the elder house, the new construct and the more bedrooms lead to decline of housing. 
+
+In this analysis, by interpreting the regression model coefficients we identified some large drivers of household prices including the existence of a waterfront, age of household, and counts of bathrooms, although, to an ambiguous degree of validity and success. We hope this study can provide data analysis for those planning to buy a house in New York, allowing them to buy their ideal house base on their needs and budget.
+
+
+\begin{figure}[htbp]
+\centering\includegraphics[width=3.5in]{rename.png}
+\caption{In Sample Performance}\label{fig:2}
+
+
+
+\centering\includegraphics[width=3.5in]{linear.png}
+\caption{Out Sample Performance}\label{fig:3}
+\end{figure}
+
+
+
+# Reference
+```{r include=FALSE}
+citation("ggplot2")
+citation("dplyr")
+citation("tidyverse")
+citation("broom")
+citation("caret")
+citation("kableExtra")
+citation("pinp")
+```
+- H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
+- Hadley Wickham, Romain François, Lionel Henry and Kirill Müller (2020). dplyr: A Grammar of Data Manipulation. R package version 1.0.2. https://CRAN.R-project.org/package=dplyr
+- Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686, https://doi.org/10.21105/joss.01686
+- David Robinson, Alex Hayes and Simon Couch (2020). broom: Convert Statistical Objects into Tidy Tibbles. R package version 0.7.2. https://CRAN.R-project.org/package=broom
+- Max Kuhn (2020). caret: Classification and Regression Training. R package version 6.0-86. https://CRAN.R-project.org/package=caret
+- Hao Zhu (2020). kableExtra: Construct Complex Table with 'kable' and Pipe Syntax. R package version 1.3.1. https://CRAN.R-project.org/package=kableExtra
+- Dirk Eddelbuettel and James Balamuta (2020). pinp: 'pinp' is not 'PNAS'. R package version 0.0.10. https://CRAN.R-project.org/package=pinp
+
+
+
+
+# Appendix
+
+```{r boxplot,fig.width=4,fig.height=3 ,fig.cap="Fig1.Boxplot of Numeric Variables", echo=FALSE,message=FALSE,warning=FALSE}
+library(ggpubr)
+a1= ggplot(data, aes(y=price))+geom_boxplot()+ggtitle("Price")
+a2= ggplot(data, aes(y=lot_size))+geom_boxplot()+ggtitle("Lot Size")
+
+a3= ggplot(data, aes(y=age))+geom_boxplot()+ggtitle("Age")
+a4= ggplot(data, aes(y=land_value))+geom_boxplot()+ggtitle("Land Value")
+
+
+a5= ggplot(data, aes(y=bedrooms))+geom_boxplot()+ggtitle("Bedrooms")
+a6= ggplot(data, aes(y=bathrooms))+geom_boxplot()+ggtitle("Bathrooms")
+a7= ggplot(data, aes(y=rooms))+geom_boxplot()+ggtitle("Rooms")
+a8= ggplot(data, aes(y=living_area))+geom_boxplot()+ggtitle("Living Area")
+a9= ggplot(data, aes(y=pct_college))+geom_boxplot()+ggtitle("College")
+ggarrange(a1,a2,a3,a4,a5,a6,a7,a8)
+```
+
+
+```{r correlation,fig.width=5,fig.height= 4,fig.cap="Fig3.Correlations of Each Two Variables", echo=FALSE,message=FALSE,warning=FALSE}
+library(GGally)
+ggcorr(data,geom = "circle", nbreaks = 7, label = T)
+```
+
+
+```{r improve_plot,fig.width=3,fig.height= 3,fig.cap="Fig4.Middle 90% of data", echo=FALSE,message=FALSE,warning=FALSE}
+
+ggplot(leading_determinants, aes(x = fitted, y = residuals)) +
+  xlim(quantile(leading_determinants$fitted, probs=c(0.05,0.95))) +
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  geom_smooth(method = "loess", se=FALSE)+ggtitle("The middle 90% of data")
+```
+
+
+
+
+
+
+
+
+
